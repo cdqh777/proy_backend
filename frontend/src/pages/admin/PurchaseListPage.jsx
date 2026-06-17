@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api';
-import { Plus, X, Check, ShoppingBag } from 'lucide-react';
+import { Plus, X, Check, ShoppingBag, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function PaginaListaCompras() {
@@ -11,6 +11,18 @@ export default function PaginaListaCompras() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [formulario, setFormulario]     = useState({ idArticulo: '', idSugerencia: '', cantidad: 1, precioEstimado: '', prioridad: 'media', notas: '' });
   const [erroresForm, setErroresForm]   = useState({});
+  const [busquedaArticulo, setBusquedaArticulo] = useState('');
+  const [articuloSeleccionado, setArticuloSeleccionado] = useState(null);
+
+  const articulosFiltrados = busquedaArticulo.trim()
+    ? articulos.filter((a) => a.name.toLowerCase().includes(busquedaArticulo.toLowerCase())).slice(0, 8)
+    : [];
+
+  const seleccionarArticulo = (articulo) => {
+    setFormulario((anterior) => ({ ...anterior, idArticulo: articulo.id, idSugerencia: '' }));
+    setArticuloSeleccionado(articulo);
+    setBusquedaArticulo('');
+  };
 
   const cargar = async () => {
     setCargando(true);
@@ -49,7 +61,10 @@ export default function PaginaListaCompras() {
         notes:    formulario.notas,
       });
       toast.success('Artículo agregado a la lista');
-      setModalAbierto(false); cargar();
+      setModalAbierto(false);
+      setBusquedaArticulo('');
+      setArticuloSeleccionado(null);
+      cargar();
     } catch (err) { toast.error(err.response?.data?.message || 'Error al agregar'); }
   };
 
@@ -85,6 +100,8 @@ export default function PaginaListaCompras() {
           setModalAbierto(true);
           setFormulario({ idArticulo: '', idSugerencia: '', cantidad: 1, precioEstimado: '', prioridad: 'media', notas: '' });
           setErroresForm({});
+          setBusquedaArticulo('');
+          setArticuloSeleccionado(null);
         }}>
           <Plus size={16} /> Agregar artículo
         </button>
@@ -174,10 +191,48 @@ export default function PaginaListaCompras() {
             </div>
             <div className="form-group">
               <label>Artículo existente</label>
-              <select value={formulario.idArticulo} onChange={(e) => { actualizarCampo('idArticulo')(e); setFormulario((a) => ({ ...a, idSugerencia: '' })); }}>
-                <option value="">Seleccionar artículo...</option>
-                {articulos.map((a) => <option key={a.id} value={a.id}>{a.name} — Stock: {a.stock}</option>)}
-              </select>
+              {articuloSeleccionado ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--cream)', borderRadius: 'var(--radius-sm)' }}>
+                  <div style={{ flex: 1 }}>
+                    <strong>{articuloSeleccionado.name}</strong>
+                    <div style={{ fontSize: 12, color: 'var(--tan)' }}>Stock: {articuloSeleccionado.stock} · {articuloSeleccionado.articleType?.name}</div>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => { setArticuloSeleccionado(null); setFormulario((a) => ({ ...a, idArticulo: '' })); }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--tan)' }} />
+                  <input
+                    placeholder="Buscar artículo por nombre..."
+                    value={busquedaArticulo}
+                    onChange={(e) => { setBusquedaArticulo(e.target.value); setFormulario((a) => ({ ...a, idArticulo: '' })); }}
+                    style={{ paddingLeft: 32 }}
+                  />
+                  {busquedaArticulo.trim() && articulosFiltrados.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1.5px solid var(--sand)', borderRadius: 'var(--radius-sm)', marginTop: 4, maxHeight: 240, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                      {articulosFiltrados.map((a) => (
+                        <div
+                          key={a.id}
+                          onClick={() => seleccionarArticulo(a)}
+                          style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f0ebe6', fontSize: 14 }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--cream)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                        >
+                          <div style={{ fontWeight: 600 }}>{a.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--tan)' }}>Stock: {a.stock} · ${(+a.price).toFixed(2)} · {a.articleType?.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {busquedaArticulo.trim() && articulosFiltrados.length === 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1.5px solid var(--sand)', borderRadius: 'var(--radius-sm)', marginTop: 4, padding: '12px 14px', fontSize: 13, color: 'var(--tan)', zIndex: 10 }}>
+                      No se encontraron artículos
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div style={{ textAlign: 'center', margin: '4px 0 12px', color: 'var(--tan)', fontSize: 13 }}>— o sugerencia de cliente —</div>
             <div className="form-group">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
-import { Plus, X, RotateCcw, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Plus, X, RotateCcw, RefreshCw, AlertTriangle, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function PaginaVentas() {
@@ -15,6 +15,7 @@ export default function PaginaVentas() {
   const [articuloSeleccionado, setArticuloSeleccionado] = useState(null);
   const [modalReclamo, setModalReclamo]   = useState(null);
   const [motivoReclamo, setMotivoReclamo] = useState('');
+  const [busquedaArticulo, setBusquedaArticulo] = useState('');
 
   const cargar = async () => {
     setCargando(true);
@@ -24,10 +25,10 @@ export default function PaginaVentas() {
       if (fechaFin)    parametros.append('endDate', fechaFin);
       const [resVentas, resArticulos] = await Promise.all([
         api.get('/sales?' + parametros),
-        api.get('/articles?status=disponible'),
+        api.get('/articles'),
       ]);
       setVentas(resVentas.data);
-      setArticulos(resArticulos.data.filter((a) => a.stock > 0));
+      setArticulos(resArticulos.data.filter((a) => a.stock > 0 && a.status !== 'agotado'));
     } catch { toast.error('Error al cargar ventas'); }
     finally { setCargando(false); }
   };
@@ -36,12 +37,16 @@ export default function PaginaVentas() {
 
   const ingresoTotal = ventas.filter(v => v.status === 'activa').reduce((suma, v) => suma + +v.total, 0);
 
-  const manejarCambioArticulo = (e) => {
-    const id = e.target.value;
-    setFormulario((anterior) => ({ ...anterior, idArticulo: id, cantidad: 1 }));
-    setArticuloSeleccionado(articulos.find((a) => a.id === +id) || null);
+  const manejarCambioArticulo = (articulo) => {
+    setFormulario((anterior) => ({ ...anterior, idArticulo: articulo.id, cantidad: 1 }));
+    setArticuloSeleccionado(articulo);
+    setBusquedaArticulo('');
     setErroresForm((anterior) => ({ ...anterior, idArticulo: undefined }));
   };
+
+  const articulosFiltrados = busquedaArticulo.trim()
+    ? articulos.filter((a) => a.name.toLowerCase().includes(busquedaArticulo.toLowerCase())).slice(0, 8)
+    : [];
 
   const validar = () => {
     const e = {};
@@ -61,6 +66,7 @@ export default function PaginaVentas() {
       setModalAbierto(false);
       setFormulario({ idArticulo: '', cantidad: 1 });
       setArticuloSeleccionado(null);
+      setBusquedaArticulo('');
       cargar();
     } catch (err) { toast.error(err.response?.data?.message || 'Error al registrar venta'); }
   };
@@ -113,7 +119,7 @@ export default function PaginaVentas() {
           <h1 className="page-title">Ventas</h1>
           <p className="page-subtitle">Registro y seguimiento de ventas</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setModalAbierto(true); setFormulario({ idArticulo: '', cantidad: 1 }); setArticuloSeleccionado(null); setErroresForm({}); }}>
+        <button className="btn btn-primary" onClick={() => { setModalAbierto(true); setFormulario({ idArticulo: '', cantidad: 1 }); setArticuloSeleccionado(null); setBusquedaArticulo(''); setErroresForm({}); }}>
           <Plus size={16} /> Registrar venta
         </button>
       </div>
@@ -220,20 +226,51 @@ export default function PaginaVentas() {
             </div>
             <div className="form-group">
               <label>Artículo *</label>
-              <select value={formulario.idArticulo} onChange={manejarCambioArticulo}>
-                <option value="">Seleccionar artículo</option>
-                {articulos.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} — Stock: {a.stock} — ${(+a.price).toFixed(2)}</option>
-                ))}
-              </select>
+              {articuloSeleccionado ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--cream)', borderRadius: 'var(--radius-sm)' }}>
+                  <div style={{ flex: 1 }}>
+                    <strong>{articuloSeleccionado.name}</strong>
+                    <div style={{ fontSize: 12, color: 'var(--tan)' }}>Stock: {articuloSeleccionado.stock} · ${(+articuloSeleccionado.price).toFixed(2)}</div>
+                  </div>
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => { setArticuloSeleccionado(null); setFormulario((a) => ({ ...a, idArticulo: '' })); }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--tan)' }} />
+                  <input
+                    placeholder="Buscar artículo por nombre..."
+                    value={busquedaArticulo}
+                    onChange={(e) => setBusquedaArticulo(e.target.value)}
+                    style={{ paddingLeft: 32 }}
+                    autoFocus
+                  />
+                  {busquedaArticulo.trim() && articulosFiltrados.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1.5px solid var(--sand)', borderRadius: 'var(--radius-sm)', marginTop: 4, maxHeight: 240, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                      {articulosFiltrados.map((a) => (
+                        <div
+                          key={a.id}
+                          onClick={() => manejarCambioArticulo(a)}
+                          style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f0ebe6', fontSize: 14 }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--cream)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                        >
+                          <div style={{ fontWeight: 600 }}>{a.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--tan)' }}>Stock: {a.stock} · ${(+a.price).toFixed(2)} · {a.articleType?.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {busquedaArticulo.trim() && articulosFiltrados.length === 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1.5px solid var(--sand)', borderRadius: 'var(--radius-sm)', marginTop: 4, padding: '12px 14px', fontSize: 13, color: 'var(--tan)', zIndex: 10 }}>
+                      No se encontraron artículos
+                    </div>
+                  )}
+                </div>
+              )}
               {erroresForm.idArticulo && <span className="error">{erroresForm.idArticulo}</span>}
             </div>
-            {articuloSeleccionado && (
-              <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--cream)', borderRadius: 'var(--radius-sm)', fontSize: 13 }}>
-                <strong>{articuloSeleccionado.name}</strong><br />
-                Precio: <strong>${(+articuloSeleccionado.price).toFixed(2)}</strong> · Stock disponible: <strong>{articuloSeleccionado.stock}</strong>
-              </div>
-            )}
             <div className="form-group">
               <label>Cantidad *</label>
               <input type="number" min="1" max={articuloSeleccionado?.stock || 9999} value={formulario.cantidad} onChange={actualizarCampo('cantidad')} />
